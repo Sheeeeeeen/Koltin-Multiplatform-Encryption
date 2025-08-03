@@ -22,6 +22,8 @@ actual class Crypto {
 class AndroidSymmetricCrypto : SymmetricCrypto {
 
     val cipher: Cipher = Cipher.getInstance(TRANSFORMATION)
+    val cryptoKey = generateKey()
+    val ivSpec = IvParameterSpec(cryptoKey.raw)
 
     override fun generateKey(): CryptoKey {
         val random = SecureRandom()
@@ -30,21 +32,16 @@ class AndroidSymmetricCrypto : SymmetricCrypto {
         return CryptoKey(iv)
     }
 
-    override fun encrypt(
-        data: ByteArray,
-        key: CryptoKey
-    ): String {
+    override fun encrypt(data: ByteArray, key: CryptoKey): String {
         try {
-            val iv = generateKey().raw
-            cipher.init(
-                Cipher.ENCRYPT_MODE,
-                SecretKeySpec(key.raw, AES_ALGORITHM),
-                IvParameterSpec(iv)
-            )
+
+            val secretSpec = SecretKeySpec(key.raw, AES_ALGORITHM)
+
+            cipher.init(Cipher.ENCRYPT_MODE, secretSpec, ivSpec)
+
             val encryptedBytes = cipher.doFinal(data)
-            val encryptedDataWithIV = ByteArray(iv.size + encryptedBytes.size)
-            System.arraycopy(iv, 0, encryptedDataWithIV, 0, iv.size)
-            System.arraycopy(encryptedBytes, 0, encryptedDataWithIV, iv.size, encryptedBytes.size)
+            val encryptedDataWithIV = cryptoKey.raw + encryptedBytes
+
             return Base64.encodeToString(encryptedDataWithIV, Base64.DEFAULT)
         } catch (e: Exception) {
 //            TODO() //handle the exception
@@ -60,7 +57,12 @@ class AndroidSymmetricCrypto : SymmetricCrypto {
         val iv = encryptedDataWithIV.copyOfRange(0, cipher.blockSize)
         val encryptedData =
             encryptedDataWithIV.copyOfRange(cipher.blockSize, encryptedDataWithIV.size)
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key.raw, AES_ALGORITHM), IvParameterSpec(iv))
+
+        val secretSpec = SecretKeySpec(key.raw, AES_ALGORITHM)
+        val ivSpec = IvParameterSpec(iv)
+
+        cipher.init(Cipher.DECRYPT_MODE, secretSpec, ivSpec)
+
         val decryptedBytes = cipher.doFinal(encryptedData)
         return String(decryptedBytes, Charsets.UTF_8)
     }
